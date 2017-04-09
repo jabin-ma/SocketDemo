@@ -7,6 +7,7 @@ import com.alibaba.fastjson.JSON;
 
 import java.net.URISyntaxException;
 
+import io.netty.handler.codec.http.HttpHeaderValues;
 import majipeng.protocol.Protocol;
 
 /**
@@ -19,11 +20,11 @@ public class MessengerServiceImpl extends MessengerService {
     public static final int EVENT_LOGON = EVENT_LAST + 0x000001;
 
     @Override
-    public void handleFromClientMessage(Message msg) {
+    public void handleFromUIMessage(Message msg) {
      switch (msg.what){
          case EVENT_LOGON://User.class
              try {
-                 postToSocket(Protocol.PATH_LOGON, JSON.toJSONString(msg.obj), Protocol.MimeType.JSON);
+                 sendPostRequest(Protocol.PATH_LOGON, JSON.toJSONString(msg.obj), HttpHeaderValues.APPLICATION_JSON.toString());
              } catch (URISyntaxException e) {
                  e.printStackTrace();
              }

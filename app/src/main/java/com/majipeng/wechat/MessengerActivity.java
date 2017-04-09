@@ -90,11 +90,6 @@ public abstract class MessengerActivity extends Activity implements ServiceConne
     public abstract void handleServiceReply(Message message);
 
 
-    public void send(Message message) {
-        message.what = MessengerService.EVENT_SEND_TO_SOCKET;
-        sendToService(message);
-    }
-
 
     public void sendToService(Message message) {
         message.replyTo = replyTo;

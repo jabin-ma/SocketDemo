@@ -23,10 +23,6 @@ import io.netty.channel.ChannelOption;
 import io.netty.channel.EventLoopGroup;
 import io.netty.channel.nio.NioEventLoopGroup;
 import io.netty.channel.socket.nio.NioSocketChannel;
-import majipeng.protocol.Header;
-import majipeng.protocol.Protocol;
-import majipeng.protocol.RequestLine;
-import majipeng.protocol.UriUtils;
 import majipeng.utils.RequestUtils;
 
 public abstract class MessengerService extends Service implements DispatchMessageListener {
@@ -36,7 +32,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
     public static final int EVENT_HANDLER_INIT = 0x000001;
 
     /**
-     * 注册一个Client(Messenger)到Service,服务器将会在收到相关Event后发送给你
+     * 注册一个UI(Messenger)到Service,服务器将会在收到相关Event后发送给你
      */
     public static final int EVENT_REGISTER_OB = 0x000002;
     /**
@@ -58,7 +54,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
 
     public static final int EVENT_LAST = EVENT_CHANNEL_READ;
 
-    public static final String FROM_CLIENT = "Client";
+    public static final String FROM_UI = "Client";
 
     public static final String FROM_PROCESS = "Process";
 
@@ -67,7 +63,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
     public static final String FROM_FILTER = "Filter";
 
 
-    private Handler forClientHandler, serviceMainHandler, forProcessHandler;
+    private Handler forUIHandler, serviceMainHandler, forProcessHandler;
 
     /**
      * 订阅者,注册后放在这个集合里
@@ -75,7 +71,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
     private ArrayList<Messenger> observers = new ArrayList<>();
 
 
-    private Messenger forProcess, forClient, mCurrentClient, forFilter;
+    private Messenger forProcess, forUI, mCurrentUI, forFilter;
 
     //当前连接
     private ChannelHandlerContext mConnectContext;
@@ -99,17 +95,17 @@ public abstract class MessengerService extends Service implements DispatchMessag
             return;
         }
         switch (from) {
-            case FROM_CLIENT://来自Client的初始化OB任务,拦截,该case为service保留
+            case FROM_UI://来自UI的初始化OB任务,拦截,该case为service保留
                 if (message.what == EVENT_REGISTER_OB) {
-                    mCurrentClient = message.replyTo;
+                    mCurrentUI = message.replyTo;
                     observers.add(message.replyTo);
                     break;
                 } else if (message.what == EVENT_UNREGISTER_OB) {
-                    mCurrentClient = null;
+                    mCurrentUI = null;
                     observers.remove(message.replyTo);
                     break;
                 }
-                handleFromClientMessage(message);
+                handleFromUIMessage(message);
                 break;
             case FROM_PROCESS:
                 handleFromProcessMessage(message);
@@ -132,24 +128,25 @@ public abstract class MessengerService extends Service implements DispatchMessag
     }
 
     private boolean handleByWhat(Message message) {
-        switch (message.what) {
-            case EVENT_SEND_TO_SOCKET:
-                if (message.obj instanceof Protocol) {
-                    sendToSocket((Protocol) message.obj);
-                } else {
-                    Log.d(TAG, "发送失败,不支持的类型");
-                }
-                return true;
-            default:
-                return false;
-        }
+        return false;
     }
 
+    /**
+     * from activity
+     * @param msg
+     */
+    public abstract void handleFromUIMessage(Message msg);
 
-    public abstract void handleFromClientMessage(Message msg);
-
+    /**
+     * from
+     * @param msg
+     */
     public abstract void handleFromProcessMessage(Message msg);
 
+    /**
+     *
+     * @param msg
+     */
     public abstract void handleFromFilterMessage(Message msg);
 
     /**
@@ -163,7 +160,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
     //初始化Handler和Messenger
     private void createHandlerAndMessenger() {
         serviceMainHandler = new CallbackHandler(this, FROM_SERVICE);
-        new Thread(new CreateForClient(), FROM_CLIENT).start();
+        new Thread(new CreateForUI(), FROM_UI).start();
         new Thread(new CreateForProcess(), FROM_PROCESS).start();
         new Thread(new CreateForFilter(), FROM_FILTER).start();
     }
@@ -179,12 +176,15 @@ public abstract class MessengerService extends Service implements DispatchMessag
                     .channel(NioSocketChannel.class)
                     .handler(new ChannelInit(forFilter));
             try {
-                ChannelFuture f = socket.connect("192.168.199.211", 9999).sync();
+                ChannelFuture f = socket.connect("192.168.199.243",9999).sync();
                 f.channel().closeFuture().sync();
                 Log.d(TAG, "connection Closed");
             } catch (InterruptedException e) {
                 e.printStackTrace();
-            } finally {
+
+            }catch(Exception e){
+                e.printStackTrace();
+            }finally {
                 worker.shutdownGracefully();
             }
         }
@@ -215,13 +215,13 @@ public abstract class MessengerService extends Service implements DispatchMessag
     }
 
     /**
-     * 创建Messenger,服务于client
+     * 创建Messenger,服务于UI
      */
-    class CreateForClient implements Runnable {
+    class CreateForUI implements Runnable {
         @Override
         public void run() {
             Looper.prepare();
-            forClient = new Messenger(new CallbackHandler(MessengerService.this, FROM_CLIENT));
+            forUI = new Messenger(new CallbackHandler(MessengerService.this, FROM_UI));
             Looper.loop();
         }
     }
@@ -235,14 +235,14 @@ public abstract class MessengerService extends Service implements DispatchMessag
 
     @Override
     public IBinder onBind(Intent intent) {
-        return forClient.getBinder();
+        return forUI.getBinder();
     }
 
 
-    void sendToClient(Message msg) {
-        if (mCurrentClient == null) return;
+    void sendToUI(Message msg) {
+        if (mCurrentUI == null) return;
         try {
-            mCurrentClient.send(msg);
+            mCurrentUI.send(msg);
         } catch (RemoteException e) {
             e.printStackTrace();
         }
@@ -253,17 +253,10 @@ public abstract class MessengerService extends Service implements DispatchMessag
         serviceMainHandler.sendMessage(msg);
     }
 
-    //发送信息到server
-    void sendToSocket(Protocol obj) {
-        Log.d(TAG, "send:" + obj.toString());
-        RequestUtils.send(mConnectContext, obj);
-    }
 
-
-    void postToSocket(String path, String content, String mimeType) throws URISyntaxException {
-        Header header = new Header(Protocol.HEADER_TYPE, mimeType);
+    void sendPostRequest(String path, String content, String mimeType) throws URISyntaxException {
         //默认只需要提供一个内容类型,以及目标
-        RequestUtils.send(mConnectContext, RequestLine.Mothed.POST, UriUtils.create(path), content, header);
+        RequestUtils.send(mConnectContext,path,content,mimeType);
     }
     //service主线程Handler
 }

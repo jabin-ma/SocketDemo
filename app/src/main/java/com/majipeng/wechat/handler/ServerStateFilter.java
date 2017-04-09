@@ -8,19 +8,14 @@ import com.majipeng.wechat.service.MessengerService;
 
 import io.netty.channel.ChannelHandlerContext;
 
-public class ProtocolFilter extends IChannelInboundHandlerAdapter {
+public class ServerStateFilter extends IChannelInboundHandlerAdapter {
     static final String TAG = "MessageHandler";
 
     //必须传入一个callback,否则数据不知道往哪里发送
-    public ProtocolFilter(Messenger callback) {
+    public ServerStateFilter(Messenger callback) {
         super(callback);
     }
 
-
-    @Override
-    public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
-        sendToCallBack(MessengerService.EVENT_CHANNEL_READ,msg);
-    }
 
     @Override
     public void channelActive(ChannelHandlerContext ctx) throws Exception {

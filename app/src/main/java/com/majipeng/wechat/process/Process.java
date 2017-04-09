@@ -6,7 +6,5 @@ package com.majipeng.wechat.process;
 
 public class Process  {
 
-
-
     void process(){}
 }
