@@ -2,11 +2,12 @@ package com.majipeng.wechat.handler;
 
 import android.util.Log;
 
+import com.majipeng.nettylib.utils.RequestUtils;
+
 import io.netty.channel.ChannelDuplexHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.handler.timeout.IdleState;
 import io.netty.handler.timeout.IdleStateEvent;
-import majipeng.utils.RequestUtils;
 
 public class KeepAliveFilter extends ChannelDuplexHandler {
     static final String TAG = KeepAliveFilter.class.getSimpleName();
