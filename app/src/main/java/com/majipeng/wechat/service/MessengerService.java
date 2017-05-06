@@ -15,6 +15,8 @@ import com.majipeng.wechat.utils.SocketState;
 
 import java.net.URISyntaxException;
 import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.locks.ReentrantLock;
 
 import io.netty.bootstrap.Bootstrap;
 import io.netty.channel.ChannelFuture;
@@ -62,6 +64,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
 
     public static final String FROM_FILTER = "Filter";
 
+    CountDownLatch initLock = new CountDownLatch(3);
 
     private Handler forUIHandler, serviceMainHandler, forProcessHandler;
 
@@ -160,7 +163,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
     //初始化Handler和Messenger
     private void createHandlerAndMessenger() {
         serviceMainHandler = new CallbackHandler(this, FROM_SERVICE);
-        new Thread(new CreateForUI(), FROM_UI).start();
+        new Thread(new CreateForUI(),FROM_UI).start();
         new Thread(new CreateForProcess(), FROM_PROCESS).start();
         new Thread(new CreateForFilter(), FROM_FILTER).start();
     }
@@ -176,13 +179,10 @@ public abstract class MessengerService extends Service implements DispatchMessag
                     .channel(NioSocketChannel.class)
                     .handler(new ChannelInit(forFilter));
             try {
-                ChannelFuture f = socket.connect("192.168.199.243",9999).sync();
+                ChannelFuture f = socket.connect("127.0.0.1",9999).sync();
                 f.channel().closeFuture().sync();
                 Log.d(TAG, "connection Closed");
             } catch (InterruptedException e) {
-                e.printStackTrace();
-
-            }catch(Exception e){
                 e.printStackTrace();
             }finally {
                 worker.shutdownGracefully();
@@ -198,6 +198,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
         public void run() {
             Looper.prepare();
             forProcess = new Messenger(new CallbackHandler(MessengerService.this, FROM_PROCESS));
+            initLock.countDown();
             Looper.loop();
         }
     }
@@ -210,6 +211,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
         public void run() {
             Looper.prepare();
             forFilter = new Messenger(new CallbackHandler(MessengerService.this, FROM_FILTER));
+            initLock.countDown();
             Looper.loop();
         }
     }
@@ -222,6 +224,7 @@ public abstract class MessengerService extends Service implements DispatchMessag
         public void run() {
             Looper.prepare();
             forUI = new Messenger(new CallbackHandler(MessengerService.this, FROM_UI));
+            initLock.countDown();
             Looper.loop();
         }
     }
@@ -235,6 +238,11 @@ public abstract class MessengerService extends Service implements DispatchMessag
 
     @Override
     public IBinder onBind(Intent intent) {
+        try {
+            initLock.await();
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
         return forUI.getBinder();
     }
 
